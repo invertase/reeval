@@ -20,7 +20,7 @@ import {
   vertexSettings,
   vertexSettingsIn,
 } from '../gateway/vertex.ts'
-import { DIRECT_PROVIDERS, hostKey, isFakeJudge, judgeRoute } from '../judge/index.ts'
+import { isFakeJudge, judgeRoute } from '../judge/index.ts'
 import type { FakeAnalysisModel, GatewayName, JudgeModel, ResolvedConfig } from '../types.ts'
 import type { Digest } from './digest.ts'
 import { type AnalysisOutput, analysisSchema, SYSTEM_PROMPT } from './schema.ts'
@@ -28,6 +28,8 @@ import { type AnalysisOutput, analysisSchema, SYSTEM_PROMPT } from './schema.ts'
 export type ResolvedAnalysisModel = {
   name: string
   route: 'direct' | 'gateway' | 'openrouter' | 'vertex' | 'fake'
+  /** The gateway it resolved to; `providerModel` settles the call on it again when it's made. */
+  gateway?: GatewayName
   fake?: FakeAnalysisModel
   /** On OpenRouter, whether it may fail the call over to another upstream provider. */
   fallbacks?: boolean
@@ -125,6 +127,7 @@ export function resolveAnalysisModel(config: ResolvedConfig): ResolvedAnalysisMo
     return {
       name: model,
       route,
+      ...(gateway && { gateway }),
       ...(route === 'openrouter' ? { fallbacks: openRouterFallbacks(scope.gateways) } : {}),
       ...(route === 'vertex' ? { vertex: vertexSettingsIn(scope.gateways) } : {}),
     }
@@ -198,22 +201,27 @@ async function languageModel(model: ResolvedAnalysisModel, digest: Digest): Prom
  * The provider's own model for a direct route, the AI Gateway's by name on vercel, OpenRouter's
  * on openrouter, or Vertex AI's on vertex.
  */
-export async function providerModel(model: ResolvedAnalysisModel): Promise<LanguageModel> {
-  if (model.route === 'gateway') return vercelLanguageModel(model.name)
-  if (model.route === 'openrouter') return openRouterLanguageModel(model.name, !!model.fallbacks)
+export async function providerModel(
+  model: ResolvedAnalysisModel,
+  what = 'analysis model',
+): Promise<LanguageModel> {
   if (model.route === 'vertex') {
     return vertexLanguageModel(model.name, model.vertex ?? vertexSettings())
   }
-  const provider = model.name.slice(0, model.name.indexOf('/'))
-  const id = model.name.slice(provider.length + 1)
-  const apiKey = DIRECT_PROVIDERS[provider] && hostKey(DIRECT_PROVIDERS[provider].key)
-  switch (provider) {
+  const route = judgeRoute(model.name, process.env, what, model.gateway)
+  if (route.kind === 'gateway') return vercelLanguageModel(model.name, route.call)
+  if (route.kind === 'openrouter') {
+    return openRouterLanguageModel(model.name, !!model.fallbacks, route.call)
+  }
+  if (route.kind !== 'direct') return model.name
+  const id = model.name.slice(route.provider.length + 1)
+  switch (route.provider) {
     case 'anthropic':
-      return (await import('@ai-sdk/anthropic')).createAnthropic({ apiKey })(id)
+      return (await import('@ai-sdk/anthropic')).createAnthropic(route.call)(id)
     case 'google':
-      return (await import('@ai-sdk/google')).createGoogle({ apiKey })(id)
+      return (await import('@ai-sdk/google')).createGoogle(route.call)(id)
     case 'openai':
-      return (await import('@ai-sdk/openai')).createOpenAI({ apiKey })(id)
+      return (await import('@ai-sdk/openai')).createOpenAI(route.call)(id)
     default:
       return model.name
   }
@@ -230,12 +238,16 @@ export function hostModel(
   { fallbacks = false, vertex }: HostModelSettings = {},
 ): Promise<LanguageModel> {
   const route = judgeRoute(name, process.env, what, gateway).kind
-  return providerModel({
-    name,
-    route,
-    ...(route === 'openrouter' ? { fallbacks } : {}),
-    ...(route === 'vertex' && vertex ? { vertex } : {}),
-  })
+  return providerModel(
+    {
+      name,
+      route,
+      ...(gateway && { gateway }),
+      ...(route === 'openrouter' ? { fallbacks } : {}),
+      ...(route === 'vertex' && vertex ? { vertex } : {}),
+    },
+    what,
+  )
 }
 
 export type ModelAnswer = {

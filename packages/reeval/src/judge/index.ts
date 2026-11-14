@@ -1,11 +1,13 @@
+import { apiHost, OPENROUTER_HOST } from '@reeval/agents'
 import { hostAllowed } from '@reeval/sandbox-docker'
-import { apiHost } from '../gateway/api.ts'
-import { OPENROUTER_HOST, OPENROUTER_KEY } from '../gateway/openrouter.ts'
+import { OPENROUTER_KEY } from '../gateway/openrouter.ts'
 import { ROUTING_GATEWAYS, type RoutingGatewayName } from '../gateway/routes.ts'
 import {
+  VERCEL_AI_SDK_PATH,
   VERCEL_KEY,
   VERCEL_OIDC,
   vercelApi,
+  vercelBaseUrl,
   vercelBaseUrlProblem,
   vercelCredentialProblem,
 } from '../gateway/vercel.ts'
@@ -13,6 +15,7 @@ import { vertexSettings } from '../gateway/vertex.ts'
 import type { JudgeRetry } from '../history/types.ts'
 import { badCharacterAt, isPlaceholder, redactSecrets } from '../redact.ts'
 import { heldSecret, hostEnv } from '../secrets-file.ts'
+import { nativeFetch, startEnv } from '../startup.ts'
 import type {
   FakeJudgeModel,
   GatewayName,
@@ -41,64 +44,79 @@ const ROUTED_KEYS: Readonly<Record<RoutingGatewayName, readonly string[]>> = {
 }
 
 /**
- * Providers `direct()` calls, each through its own AI SDK package and key, at its API's origin or
- * the package's base-URL variable's. Any other prefix needs `vercel()` in the config's gateway list.
+ * Providers `direct()` calls, each through its own AI SDK package and key, at its API's base URL
+ * (the package's default) or the package's base-URL variable's. Any other prefix needs `vercel()`
+ * in the config's gateway list.
  */
 export const DIRECT_PROVIDERS: Record<
   string,
-  { key: string; pkg: string; name: string; origin: string; baseUrl?: string }
+  { key: string; pkg: string; name: string; api: string; baseUrl?: string }
 > = {
   anthropic: {
     key: 'ANTHROPIC_API_KEY',
     pkg: '@ai-sdk/anthropic',
     name: 'Anthropic',
-    origin: 'https://api.anthropic.com',
+    api: 'https://api.anthropic.com/v1',
     baseUrl: 'ANTHROPIC_BASE_URL',
   },
   google: {
     key: 'GOOGLE_GENERATIVE_AI_API_KEY',
     pkg: '@ai-sdk/google',
     name: 'Google',
-    origin: 'https://generativelanguage.googleapis.com',
+    api: 'https://generativelanguage.googleapis.com/v1beta',
   },
   openai: {
     key: 'OPENAI_API_KEY',
     pkg: '@ai-sdk/openai',
     name: 'OpenAI',
-    origin: 'https://api.openai.com',
+    api: 'https://api.openai.com/v1',
     baseUrl: 'OPENAI_BASE_URL',
   },
   'typesafe-ai': {
     key: 'TYPESAFE_AI_API_KEY',
     pkg: '@ai-sdk/typesafe-ai',
     name: 'TypeSafe AI',
-    origin: 'https://api.typesafe.ai',
+    api: 'https://api.typesafe.ai/v1',
     baseUrl: 'TYPESAFE_AI_BASE_URL',
   },
 }
 
-/** The host a direct provider's package calls: its base-URL variable's, else its API's. */
-function directHost(provider: (typeof DIRECT_PROVIDERS)[string], env: NodeJS.ProcessEnv): string {
-  const base = provider.baseUrl && env[provider.baseUrl]
-  return URL.parse(base || provider.origin)?.hostname ?? new URL(provider.origin).hostname
-}
-
 /**
- * The value reeval's own model calls send for the credential `key`: a held brokered secret's in
- * place of its placeholder, which `judgeRoute` allows only on the secret's hosts.
+ * What a host call's AI SDK provider is made with, settled from the environment `judgeRoute`
+ * checked, so nothing the provider reads later can move the key: the base URL (undefined for the
+ * package's own fixed one), the key, and for a held brokered key a fetch that sends it only to
+ * the key's hosts.
  */
-export const hostKey = (key: string, env: NodeJS.ProcessEnv = process.env): string | undefined =>
-  hostEnv(env)[key]
+export type HostCall = { baseURL?: string; apiKey?: string; fetch?: typeof fetch }
 
 /**
  * A host call's route: its provider's own package, Vercel AI Gateway by name, OpenRouter's
  * package, or Vertex AI.
  */
 export type JudgeRoute =
-  | { kind: 'direct'; provider: string; pkg: string }
-  | { kind: 'gateway' }
-  | { kind: 'openrouter' }
+  | { kind: 'direct'; provider: string; pkg: string; call: HostCall }
+  | { kind: 'gateway'; call: HostCall }
+  | { kind: 'openrouter'; call: HostCall }
   | { kind: 'vertex' }
+
+const LOOPBACK = /^(localhost|127(\.\d{1,3}){3}|\[::1\])$/
+
+/**
+ * A fetch for a held brokered key: to `allowed` hosts only, over https unless the host is this
+ * machine, through the runtime's own fetch as reeval started with it, and never following a
+ * redirect, which could carry the key's header to another origin.
+ */
+function brokeredFetch(key: string, allowed: (host: string) => boolean): typeof fetch {
+  return (input, init) => {
+    const url = new URL(input instanceof Request ? input.url : String(input))
+    if (!allowed(url.hostname) || (url.protocol !== 'https:' && !LOOPBACK.test(url.hostname))) {
+      return Promise.reject(
+        new Error(`reeval refused to send ${key}, a brokered key, to ${url.origin}.`),
+      )
+    }
+    return nativeFetch(input, { ...init, redirect: 'error' })
+  }
+}
 
 export type { JudgeState } from '../types.ts'
 
@@ -209,22 +227,30 @@ export function judgeRoute(
       `No credentials for ${what} "${model}" (provider "${provider}"). Set ${modelKeyOptions(model, gateway)}, in the environment or .env.local.${unusedGatewayKey(env, gateway)}`,
     )
   }
-  const route: JudgeRoute =
-    gateway === 'openrouter'
-      ? { kind: 'openrouter' }
-      : direct && key === direct.key
-        ? { kind: 'direct', provider, pkg: direct.pkg }
-        : { kind: 'gateway' }
+  // Base URLs come from the environment as it was before any eval code ran, so only the
+  // project's own settings decide where a key goes.
+  const settings = env === process.env ? startEnv() : env
+  const kind =
+    gateway === 'openrouter' ? 'openrouter' : direct && key === direct.key ? 'direct' : 'gateway'
+  const vercelBase = kind === 'gateway' ? vercelBaseUrl(settings) : undefined
+  const baseURL =
+    kind === 'direct' && direct
+      ? (direct.baseUrl && settings[direct.baseUrl]) || direct.api
+      : vercelBase && `${vercelBase}${VERCEL_AI_SDK_PATH}`
+  const url = URL.parse(
+    baseURL ?? (kind === 'openrouter' ? `https://${OPENROUTER_HOST}` : vercelApi(settings).origin),
+  )
+  const host =
+    url?.hostname ?? (kind === 'gateway' ? apiHost(vercelApi(settings)) : String(baseURL))
+  const real = hostEnv(env)
+  const call: HostCall = {
+    ...(baseURL && { baseURL }),
+    ...(kind !== 'gateway' || real[key] !== env[key] ? { apiKey: real[key] } : {}),
+  }
   const held = heldSecret(key)
   if (held && isPlaceholder(env[key])) {
     // reeval's own process calls the host, so a brokered key may go where it's brokered to, and
     // the eval code still reads only its placeholder.
-    const host =
-      route.kind === 'openrouter'
-        ? OPENROUTER_HOST
-        : route.kind === 'direct' && direct
-          ? directHost(direct, env)
-          : apiHost(vercelApi(env))
     if (key === VERCEL_OIDC) {
       throw new Error(
         `${key} for ${what} "${model}" is a ${held.mode} secret, and the ${what} calls ${host} from reeval's own process, which reads Vercel's project token only from the environment: give ${key} the readable mode, or use AI_GATEWAY_API_KEY.`,
@@ -235,13 +261,19 @@ export function judgeRoute(
         `${key} for ${what} "${model}" is a ${held.mode} secret, which only the agent's sandbox gets, and the ${what} calls ${host} from reeval's own process: give ${key} the brokered mode with ${host} among its hosts, or the readable mode.`,
       )
     }
-    if (!hostAllowed(held.hosts, host)) {
+    const { hosts } = held
+    if (!hostAllowed(hosts, host)) {
       throw new Error(
-        `${key} for ${what} "${model}" is brokered to ${held.hosts.join(', ')}, and the ${what} calls ${host}, which it isn't brokered to.`,
+        `${key} for ${what} "${model}" is brokered to ${hosts.join(', ')}, and the ${what} calls ${host}, which it isn't brokered to.`,
       )
     }
+    if (!url || (url.protocol !== 'https:' && !LOOPBACK.test(url.hostname))) {
+      throw new Error(
+        `${key} for ${what} "${model}" is brokered, and the ${what} would call ${baseURL}: a brokered key goes only to an https:// URL, or to this machine.`,
+      )
+    }
+    call.fetch = brokeredFetch(key, (h) => hostAllowed(hosts, h))
   }
-  const real = hostEnv(env)
   if (key === VERCEL_OIDC) {
     const expired = vercelCredentialProblem(real)
     if (expired) throw new Error(`${what} "${model}": ${expired}`)
@@ -252,10 +284,11 @@ export function judgeRoute(
       `${key} for ${what} "${model}" has whitespace or a line break in it at character ${at}. A key copied from a wrapped terminal line picks these up; set it again as one line.`,
     )
   }
-  if (route.kind !== 'gateway') return route
-  const base = vercelBaseUrlProblem(env)
+  if (kind === 'openrouter') return { kind, call }
+  if (kind === 'direct' && direct) return { kind, provider, pkg: direct.pkg, call }
+  const base = vercelBaseUrlProblem(settings)
   if (base) throw new Error(`${what} "${model}": ${base}`)
-  return route
+  return { kind: 'gateway', call }
 }
 
 /** A verdict plus the transient failures retried on the way to it. */

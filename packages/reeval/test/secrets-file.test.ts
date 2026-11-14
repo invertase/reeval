@@ -14,9 +14,10 @@ import { resolveEnvironment } from '../src/environment/resolve.ts'
 import { applied, defineEnvironment } from '../src/environment.ts'
 import { vercelLanguageModel } from '../src/gateway/vercel-models.ts'
 import { agentAuth, agentFor } from '../src/harness/agents.ts'
-import { hostKey, judgeRoute } from '../src/judge/index.ts'
+import { judgeRoute } from '../src/judge/index.ts'
 import { redactSecrets, registerSecret } from '../src/redact.ts'
 import { hostEnv, readSecretsFile } from '../src/secrets-file.ts'
+import { pinStartEnv } from '../src/startup.ts'
 import type { AgentHarnessDescriptor, EnvironmentInput } from '../src/types.ts'
 import { fakeConfig, project, readRun, runCli, tempDir } from './helpers.ts'
 
@@ -220,7 +221,7 @@ describe('held secrets in this process', () => {
     )
   })
 
-  test("reeval's own model calls use a brokered key on its hosts, and refuse it elsewhere", () => {
+  test("reeval's own model calls use a brokered key on its hosts, and refuse it elsewhere", async () => {
     hold({
       ANTHROPIC_API_KEY: {
         mode: 'brokered',
@@ -235,45 +236,44 @@ describe('held secrets in this process', () => {
       },
       OPENAI_API_KEY: { mode: 'brokered', hosts: ['*.openai.com'], value: 'sk-oa-1234567890' },
     })
-    assert.deepEqual(judgeRoute('anthropic/claude-sonnet-5-5'), {
-      kind: 'direct',
-      provider: 'anthropic',
-      pkg: '@ai-sdk/anthropic',
-    })
-    assert.equal(hostKey('ANTHROPIC_API_KEY'), 'sk-ant-12345678')
-    assert.deepEqual(judgeRoute('openai/gpt-6', process.env, 'analysis model'), {
-      kind: 'direct',
-      provider: 'openai',
-      pkg: '@ai-sdk/openai',
-    })
-    assert.deepEqual(
-      judgeRoute('google/gemini-3.8-flash', process.env, 'judge model', 'openrouter'),
-      {
-        kind: 'openrouter',
-      },
+    const anthropic = judgeRoute('anthropic/claude-sonnet-5-5')
+    assert.equal(anthropic.kind, 'direct')
+    assert.ok('call' in anthropic)
+    assert.equal(anthropic.call.baseURL, 'https://api.anthropic.com/v1')
+    assert.equal(anthropic.call.apiKey, 'sk-ant-12345678')
+    assert.ok(anthropic.call.fetch)
+    await assert.rejects(
+      anthropic.call.fetch('https://elsewhere.example.com/v1/messages', { method: 'POST' }),
+      /reeval refused to send ANTHROPIC_API_KEY, a brokered key, to https:\/\/elsewhere\.example\.com/,
     )
-    assert.deepEqual(judgeRoute('google/gemini-3.8-flash', process.env, 'judge model', 'vercel'), {
-      kind: 'gateway',
-    })
+    const openai = judgeRoute('openai/gpt-6', process.env, 'analysis model')
+    assert.ok(openai.kind === 'direct' && openai.call.apiKey === 'sk-oa-1234567890')
+    const router = judgeRoute('google/gemini-3.8-flash', process.env, 'judge model', 'openrouter')
+    assert.ok(router.kind === 'openrouter' && router.call.apiKey === 'sk-or-123456789')
+    const gateway = judgeRoute('google/gemini-3.8-flash', process.env, 'judge model', 'vercel')
+    assert.ok(gateway.kind === 'gateway' && gateway.call.apiKey === 'vck-1234567890ab')
     // The AI SDK's gateway provider gets the held value; without one, `ai` resolves the model by
     // name with the environment's key.
-    assert.notEqual(typeof vercelLanguageModel('google/gemini-3.8-flash'), 'string')
-    assert.equal(
-      typeof vercelLanguageModel('google/gemini-3.8-flash', {
-        AI_GATEWAY_API_KEY: 'vck-plain-123',
-      }),
-      'string',
-    )
+    assert.notEqual(typeof vercelLanguageModel('google/gemini-3.8-flash', gateway.call), 'string')
+    assert.equal(typeof vercelLanguageModel('google/gemini-3.8-flash'), 'string')
 
-    // Twins: the call goes to a host the key isn't brokered to.
-    process.env.ANTHROPIC_BASE_URL = 'https://proxy.example.com/v1'
-    try {
-      assert.throws(
-        () => judgeRoute('anthropic/claude-sonnet-5-5'),
+    // Twins: the call goes to a host the key isn't brokered to, or over plain http.
+    for (const [url, refusal] of [
+      [
+        'https://proxy.example.com/v1',
         /ANTHROPIC_API_KEY for judge model "anthropic\/claude-sonnet-5-5" is brokered to api\.anthropic\.com, and the judge model calls proxy\.example\.com, which it isn't brokered to/,
-      )
-    } finally {
-      delete process.env.ANTHROPIC_BASE_URL
+      ],
+      [
+        'http://api.anthropic.com/v1',
+        /ANTHROPIC_API_KEY for judge model "anthropic\/claude-sonnet-5-5" is brokered, and the judge model would call http:\/\/api\.anthropic\.com\/v1: a brokered key goes only to an https:\/\/ URL, or to this machine/,
+      ],
+    ] as const) {
+      process.env.ANTHROPIC_BASE_URL = url
+      try {
+        assert.throws(() => judgeRoute('anthropic/claude-sonnet-5-5'), refusal)
+      } finally {
+        delete process.env.ANTHROPIC_BASE_URL
+      }
     }
     hold({
       AI_GATEWAY_API_KEY: {
@@ -303,14 +303,75 @@ describe('held secrets in this process', () => {
       ANTHROPIC_API_KEY: { mode: 'brokered', hosts: ['127.0.0.1'], value: 'sk-ant-wire-1234' },
     })
     process.env.ANTHROPIC_BASE_URL = `http://127.0.0.1:${port}/v1`
+    // Eval code that wraps the global fetch never sees the call.
+    const global = globalThis.fetch
+    let wrapped = 0
+    globalThis.fetch = (...args) => {
+      wrapped++
+      return global(...args)
+    }
     try {
       const model = await hostModel('anthropic/claude-sonnet-5-5', 'direct', 'analysis model')
       await assert.rejects(generateText({ model, prompt: 'hi', maxRetries: 0 }))
       assert.equal(seen, 'sk-ant-wire-1234')
+      assert.equal(wrapped, 0)
       assert.match(process.env.ANTHROPIC_API_KEY ?? '', /^reeval_secret_/)
     } finally {
+      globalThis.fetch = global
       delete process.env.ANTHROPIC_BASE_URL
       server.close()
+    }
+  })
+
+  test('a base URL changed after start, or a redirect, never takes a brokered key elsewhere', async () => {
+    const seen: Record<string, string | undefined> = {}
+    const listen = async (
+      name: string,
+      answer: (port: number) => [number, Record<string, string>],
+    ) => {
+      const server = createServer((req, res) => {
+        seen[name] = req.headers['x-api-key'] as string
+        const [status, headers] = answer((server.address() as AddressInfo).port)
+        res.writeHead(status, headers)
+        res.end(
+          JSON.stringify({ type: 'error', error: { type: 'authentication_error', message: 'no' } }),
+        )
+      })
+      await new Promise<void>((done) => server.listen(0, '127.0.0.1', done))
+      return server
+    }
+    const other = await listen('other', () => [401, { 'content-type': 'application/json' }])
+    const otherPort = (other.address() as AddressInfo).port
+    const pinnedServer = await listen('pinned', () => [401, { 'content-type': 'application/json' }])
+    const redirecting = await listen('redirecting', () => [
+      307,
+      { location: `http://localhost:${otherPort}/v1/messages` },
+    ])
+    hold({
+      ANTHROPIC_API_KEY: { mode: 'brokered', hosts: ['127.0.0.1'], value: 'sk-ant-pin-12345' },
+    })
+    try {
+      process.env.ANTHROPIC_BASE_URL = `http://127.0.0.1:${(pinnedServer.address() as AddressInfo).port}/v1`
+      pinStartEnv()
+      process.env.ANTHROPIC_BASE_URL = `http://127.0.0.1:${otherPort}/v1`
+      const model = await hostModel('anthropic/claude-sonnet-5-5', 'direct', 'analysis model')
+      await assert.rejects(generateText({ model, prompt: 'hi', maxRetries: 0 }))
+      assert.equal(seen.pinned, 'sk-ant-pin-12345')
+      assert.equal(seen.other, undefined)
+
+      pinStartEnv(null)
+      process.env.ANTHROPIC_BASE_URL = `http://127.0.0.1:${(redirecting.address() as AddressInfo).port}/v1`
+      const redirected = await hostModel('anthropic/claude-sonnet-5-5', 'direct', 'analysis model')
+      await assert.rejects(
+        generateText({ model: redirected, prompt: 'hi', maxRetries: 0 }),
+        /redirect/,
+      )
+      assert.equal(seen.redirecting, 'sk-ant-pin-12345')
+      assert.equal(seen.other, undefined)
+    } finally {
+      pinStartEnv(null)
+      delete process.env.ANTHROPIC_BASE_URL
+      for (const server of [other, pinnedServer, redirecting]) server.close()
     }
   })
 

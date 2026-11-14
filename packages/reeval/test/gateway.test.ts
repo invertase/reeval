@@ -23,7 +23,12 @@ import {
 import { openRouterBilling, openRouterFallbacks } from '../src/gateway/openrouter-models.ts'
 import { fallbackHint, resolveGateway } from '../src/gateway/resolve.ts'
 import { onRoutingGateway, ROUTING_GATEWAYS } from '../src/gateway/routes.ts'
-import { VERCEL_GATEWAY, vercelApi, vercelCredential } from '../src/gateway/vercel.ts'
+import {
+  VERCEL_AI_SDK_PATH,
+  VERCEL_GATEWAY,
+  vercelApi,
+  vercelCredential,
+} from '../src/gateway/vercel.ts'
 import { vercelDecisionModel, vercelLanguageModel } from '../src/gateway/vercel-models.ts'
 import {
   SANDBOX_ACCESS_TOKEN,
@@ -176,6 +181,7 @@ describe('the models reeval calls itself', () => {
     const both = { ANTHROPIC_API_KEY: 'a', AI_GATEWAY_API_KEY: 'g' }
     assert.deepEqual(judgeRoute('anthropic/claude-x', both, 'judge model', 'vercel'), {
       kind: 'gateway',
+      call: {},
     })
     assert.throws(
       () => judgeRoute('anthropic/claude-x', { ANTHROPIC_API_KEY: 'a' }, 'judge model', 'vercel'),
@@ -937,7 +943,7 @@ describe('OpenRouter routes', () => {
     assert.deepEqual(judgeCredentials('anthropic/claude-x', 'openrouter'), ['OPENROUTER_API_KEY'])
     assert.deepEqual(
       judgeRoute('typesafe/jev-1.14', { OPENROUTER_API_KEY: 'k' }, 'judge model', 'openrouter'),
-      { kind: 'openrouter' },
+      { kind: 'openrouter', call: { apiKey: 'k' } },
     )
     assert.throws(
       () =>
@@ -1654,7 +1660,7 @@ describe('AI_GATEWAY_BASE_URL', () => {
         'judge model',
         'vercel',
       ),
-      { kind: 'gateway' },
+      { kind: 'gateway', call: { baseURL: `${BASE}${VERCEL_AI_SDK_PATH}` } },
     )
     assert.throws(
       () =>
@@ -1672,8 +1678,8 @@ describe('AI_GATEWAY_BASE_URL', () => {
   })
 
   test("reeval's own calls go to it with the key, at the AI SDK's path under it", async () => {
-    assert.equal(vercelLanguageModel('openai/m', {}), 'openai/m')
-    assert.equal(vercelDecisionModel('openai/m', {}), 'openai/m')
+    assert.equal(vercelLanguageModel('openai/m'), 'openai/m')
+    assert.equal(vercelDecisionModel('openai/m'), 'openai/m')
     const seen: { url?: string; auth?: string }[] = []
     const server = createServer((req, res) => {
       seen.push({ url: req.url, auth: req.headers.authorization })
@@ -1684,14 +1690,14 @@ describe('AI_GATEWAY_BASE_URL', () => {
     try {
       const { port } = server.address() as AddressInfo
       process.env.AI_GATEWAY_API_KEY = 'run-token'
-      const env = { AI_GATEWAY_BASE_URL: `http://127.0.0.1:${port}/proxy` }
+      const call = { baseURL: `http://127.0.0.1:${port}/proxy${VERCEL_AI_SDK_PATH}` }
       await generateText({
-        model: vercelLanguageModel('openai/m', env),
+        model: vercelLanguageModel('openai/m', call),
         prompt: 'hi',
         maxRetries: 0,
       }).catch(() => undefined)
       assert.deepEqual(seen, [{ url: '/proxy/v4/ai/language-model', auth: 'Bearer run-token' }])
-      assert.equal(typeof vercelDecisionModel('openai/m', env), 'object')
+      assert.equal(typeof vercelDecisionModel('openai/m', call), 'object')
     } finally {
       server.close()
     }
