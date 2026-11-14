@@ -43,17 +43,27 @@ import { type DerivedTokens, tokenizeResponse } from './tokens.ts'
 import { MODEL_FIELD, usageReader } from './usage.ts'
 import { webSocketScrubber } from './websocket.ts'
 
+/** A path segment's characters: unreserved, sub-delims but `;`, `:`, `@`, and percent-encodings. */
+const SEGMENT = /^(?:[A-Za-z0-9\-._~!$&'()*+,=:@]|%[0-9A-Fa-f]{2})*$/
+/** A query's: a segment's, with `;`, `/` and `?`. */
+const QUERY = /^(?:[A-Za-z0-9\-._~!$&'()*+,;=:@/?]|%[0-9A-Fa-f]{2})*$/
+/** Percent-encodings of `.`, `/`, `\`, `;`, `#`, `%` and control bytes. */
+const ENCODED_SPECIAL = /%(?:2e|2f|5c|3b|23|25|[01][0-9a-f]|7f)/i
+
 /**
- * Whether a request path could leave the relay's prefix once a URL parser resolves it: a `.` or `..`
- * segment, raw or percent-encoded, a backslash (which WHATWG URLs read as `/`), or an empty segment
- * before the last.
+ * Whether a relay may take a request target as it is: only the characters above, no encoded
+ * dot, slash, backslash, `;`, `#`, `%` or control byte, and no `.`, `..` or empty segment before
+ * the last. A relay resolves the target as it sees fit, so anything a parser could read as a step
+ * out of `via`'s path, or as the end of it, is refused rather than guessed at.
  */
-function climbsOut(path: string): boolean {
-  const pathname = path.split('?')[0] ?? ''
-  if (/\\|%5c/i.test(pathname)) return true
-  const segments = pathname.split('/').slice(1)
-  return segments.some(
-    (s, i) => (s === '' && i < segments.length - 1) || /^(\.|%2e){1,2}$/i.test(s),
+function relayable(target: string): boolean {
+  const at = target.indexOf('?')
+  const path = at === -1 ? target : target.slice(0, at)
+  const query = at === -1 ? '' : target.slice(at + 1)
+  if (!path.startsWith('/') || ENCODED_SPECIAL.test(target) || !QUERY.test(query)) return false
+  const segments = path.split('/').slice(1)
+  return segments.every(
+    (s, i) => SEGMENT.test(s) && s !== '.' && s !== '..' && (s !== '' || i === segments.length - 1),
   )
 }
 
@@ -140,8 +150,10 @@ export type EgressProxyOptions = {
    * Hosts whose requests go to another server instead: each decrypted request to one of `hosts`
    * is sent, after its credentials are swapped in, to `via`'s origin with `via`'s path before its
    * own, as it is otherwise. `via` is an `https://` URL with no user, query or fragment; the relay is
-   * reached over HTTP/1.1. A relayed request whose path has a `.`, `..` or empty segment, or a
-   * backslash, is refused, so a relay that resolves the path can't be reached outside `via`'s.
+   * reached over HTTP/1.1. A relayed request's target may hold only unreserved characters,
+   * sub-delims but `;` (which a query may hold), `:`, `@` and percent-encodings other than of `.`,
+   * `/`, `\`, `;`, `#`, `%` and control bytes, with no `.`, `..` or empty segment before the last;
+   * any other is refused, so a relay that resolves the target can't be reached outside `via`'s path.
    */
   relays?: readonly Relay[]
   /** Every DNS decision and, once each is done, every request and tunnel: for debug logs. */
@@ -1597,10 +1609,10 @@ export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
     const reads: Reads = { model: !!readsModel, usage: !!readsUsage }
     const relay = relayFor(target.host)
     const relayRefusal =
-      relay && climbsOut(path)
+      relay && !(relayable(asked) && relayable(path))
         ? {
             status: 400,
-            reason: `reeval egress gateway: ${target.host}'s requests go through a relay, which takes no path with a dot, empty or backslash segment`,
+            reason: `reeval egress gateway: ${target.host}'s requests go through a relay, which takes only plain path segments and queries: no dot or empty segment, semicolon, hash, backslash, whitespace or control character, and no percent-encoded dot, slash, backslash, semicolon, hash, percent or control byte`,
           }
         : undefined
     const refusal = refused ?? relayRefusal

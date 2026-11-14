@@ -3426,7 +3426,7 @@ describe('relays', () => {
     }
   })
 
-  test("a relayed path that could climb out of the relay's prefix is refused, and the relay gets nothing", async () => {
+  test('a relayed target outside plain segments and queries is refused, and the relay gets nothing', async () => {
     const gw = await startProxy(undefined, {
       relays: [{ hosts: [HOST], via: `https://localhost:${relay.port}/echo/vercel/` }],
     })
@@ -3440,15 +3440,33 @@ describe('relays', () => {
         '/v1//chat',
         '/v1\\..\\x',
         '/v1/%5c../x',
+        '/..#x',
+        '/a/..#?q',
+        '/..;/x',
+        '/..%2f..%2fx',
+        '/%252e%252e/x',
+        '/x/..%3b/y',
+        '/a/..%09/b',
+        '/..%00/x',
+        '/v1/chat?x=1#f',
+        '/v1/chat?x=%00',
       ]) {
         seen.length = 0
         const r = await viaProxy(gw, HOST, upstream.port, { path })
         assert.equal(r.status, 400, path)
-        assert.match(r.body, /takes no path with a dot, empty or backslash segment/, path)
+        assert.match(r.body, /takes only plain path segments and queries/, path)
         assert.deepEqual(seen, [], `${path} reached nothing`)
       }
-      // Twins: dots inside a segment, and a trailing slash, are ordinary paths.
-      for (const path of ['/v1/models/gpt-6.1', '/v1/chat/', '/v1/..x/y']) {
+      // Twins: dots inside a segment, a trailing slash, sub-delims, `:` and `@`, another
+      // percent-encoding, and a query with `;` and `/`, go through as they are.
+      for (const path of [
+        '/v1/models/gpt-6.1',
+        '/v1/chat/',
+        '/v1/..x/y',
+        "/v1/a:b@c/!$&'()*+,=",
+        '/v1/models/anthropic%2Dclaude',
+        '/v1/chat?stream=1&a=b;c/d?e',
+      ]) {
         const r = await viaProxy(gw, HOST, upstream.port, { path })
         assert.equal(r.status, 200, path)
         assert.equal(JSON.parse(r.body).path, `/echo/vercel${path}`)
